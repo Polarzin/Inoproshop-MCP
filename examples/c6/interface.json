@@ -1,0 +1,264 @@
+{
+  "case": "c6",
+  "program": "FlyingShearDemo",
+  "units": {
+    "length": "u",
+    "velocity": "u/s",
+    "display_mm_per_u": 1,
+    "Feed": "+X",
+    "Carriage": "+X",
+    "Knife": "positive down"
+  },
+  "parameters": {
+    "task_ms": 10,
+    "sample_ms": 20,
+    "confirmation_s": 3,
+    "prepare_timeout_s": 30,
+    "run_timeout_s": 40,
+    "feed_velocity_u_s": 20,
+    "period_u": 160,
+    "table_points": 128,
+    "carriage_stroke_u": 90,
+    "knife_depth_u": 8,
+    "sync_window_u": [
+      30,
+      90
+    ],
+    "knife_down_u": [
+      42,
+      58
+    ],
+    "knife_bottom_u": [
+      58,
+      62
+    ],
+    "knife_up_u": [
+      62,
+      78
+    ],
+    "sync_position_tolerance_u": 0.35,
+    "sync_velocity_tolerance_u_s": 0.75,
+    "carriage_error_tolerance_u": 0.35,
+    "knife_error_tolerance_u": 0.15,
+    "host_carriage_tolerance_u": 1,
+    "host_knife_tolerance_u": 0.5,
+    "cut_depth_min_u": 7.9,
+    "knife_up_max_u": 0.1,
+    "cut_material_offset_u": 15,
+    "cut_position_tolerance_u": 0.35,
+    "cycles": 3,
+    "stable_s": 0.2,
+    "stable_tolerance_u": 0.01
+  },
+  "cut_states": {
+    "0": "idle/preparing",
+    "1": "carriage chasing",
+    "2": "synchronized window",
+    "3": "knife down",
+    "4": "knife at depth",
+    "5": "knife up",
+    "6": "carriage deceleration/return"
+  },
+  "fields": {
+    "Enable": {
+      "iec": "BOOL",
+      "ua": "Boolean",
+      "write": true
+    },
+    "Prepare": {
+      "iec": "BOOL",
+      "ua": "Boolean",
+      "write": true
+    },
+    "Execute": {
+      "iec": "BOOL",
+      "ua": "Boolean",
+      "write": true
+    },
+    "StopCommand": {
+      "iec": "BOOL",
+      "ua": "Boolean",
+      "write": true
+    },
+    "Ready": {
+      "iec": "BOOL",
+      "ua": "Boolean"
+    },
+    "Prepared": {
+      "iec": "BOOL",
+      "ua": "Boolean"
+    },
+    "Preparing": {
+      "iec": "BOOL",
+      "ua": "Boolean"
+    },
+    "Running": {
+      "iec": "BOOL",
+      "ua": "Boolean"
+    },
+    "Coupled": {
+      "iec": "BOOL",
+      "ua": "Boolean"
+    },
+    "Stopped": {
+      "iec": "BOOL",
+      "ua": "Boolean"
+    },
+    "SyncWindow": {
+      "iec": "BOOL",
+      "ua": "Boolean"
+    },
+    "Synchronized": {
+      "iec": "BOOL",
+      "ua": "Boolean"
+    },
+    "CutInProgress": {
+      "iec": "BOOL",
+      "ua": "Boolean"
+    },
+    "CutComplete": {
+      "iec": "BOOL",
+      "ua": "Boolean"
+    },
+    "Error": {
+      "iec": "BOOL",
+      "ua": "Boolean"
+    },
+    "PreparePrevious": {
+      "iec": "BOOL",
+      "ua": "Boolean"
+    },
+    "ExecutePrevious": {
+      "iec": "BOOL",
+      "ua": "Boolean"
+    },
+    "PrepareCount": {
+      "iec": "UDINT",
+      "ua": "UInt32"
+    },
+    "CommandCount": {
+      "iec": "UDINT",
+      "ua": "UInt32"
+    },
+    "CutCount": {
+      "iec": "UDINT",
+      "ua": "UInt32"
+    },
+    "CycleIndex": {
+      "iec": "UDINT",
+      "ua": "UInt32"
+    },
+    "ErrorID": {
+      "iec": "UDINT",
+      "ua": "UInt32"
+    },
+    "LastCutCycle": {
+      "iec": "UDINT",
+      "ua": "UInt32"
+    },
+    "CheckedScans": {
+      "iec": "UDINT",
+      "ua": "UInt32"
+    },
+    "SyncScans": {
+      "iec": "UDINT",
+      "ua": "UInt32"
+    },
+    "CutState": {
+      "iec": "DINT",
+      "ua": "Int32"
+    },
+    "FeedActual": {
+      "iec": "LREAL",
+      "ua": "Double"
+    },
+    "CarriageActual": {
+      "iec": "LREAL",
+      "ua": "Double"
+    },
+    "KnifeActual": {
+      "iec": "LREAL",
+      "ua": "Double"
+    },
+    "FeedVelocity": {
+      "iec": "LREAL",
+      "ua": "Double"
+    },
+    "CarriageVelocity": {
+      "iec": "LREAL",
+      "ua": "Double"
+    },
+    "KnifeVelocity": {
+      "iec": "LREAL",
+      "ua": "Double"
+    },
+    "Phase": {
+      "iec": "LREAL",
+      "ua": "Double"
+    },
+    "SyncError": {
+      "iec": "LREAL",
+      "ua": "Double"
+    },
+    "SyncVelocityError": {
+      "iec": "LREAL",
+      "ua": "Double"
+    },
+    "CarriageExpected": {
+      "iec": "LREAL",
+      "ua": "Double"
+    },
+    "KnifeExpected": {
+      "iec": "LREAL",
+      "ua": "Double"
+    },
+    "MaxCarriageError": {
+      "iec": "LREAL",
+      "ua": "Double"
+    },
+    "MaxKnifeError": {
+      "iec": "LREAL",
+      "ua": "Double"
+    },
+    "MaxSyncError": {
+      "iec": "LREAL",
+      "ua": "Double"
+    },
+    "MaxSyncVelocityError": {
+      "iec": "LREAL",
+      "ua": "Double"
+    },
+    "LastCutPosition": {
+      "iec": "LREAL",
+      "ua": "Double"
+    },
+    "LastCutDepth": {
+      "iec": "LREAL",
+      "ua": "Double"
+    },
+    "LastCutSyncError": {
+      "iec": "LREAL",
+      "ua": "Double"
+    },
+    "LastCutVelocityError": {
+      "iec": "LREAL",
+      "ua": "Double"
+    },
+    "LastCutFeed": {
+      "iec": "LREAL",
+      "ua": "Double"
+    },
+    "LastCutCarriage": {
+      "iec": "LREAL",
+      "ua": "Double"
+    },
+    "LastCutKnife": {
+      "iec": "LREAL",
+      "ua": "Double"
+    }
+  },
+  "last_cut_valid_when": "CutCount > 0 in current CommandCount",
+  "error_codes": {
+    "60001": "knife motion without synchronization; latched until application restart"
+  }
+}

@@ -1,0 +1,10 @@
+node_modules/
+var/
+__pycache__/
+*.project*
+*.opt
+*.log
+.env
+*.pem
+*.key
+*.der
