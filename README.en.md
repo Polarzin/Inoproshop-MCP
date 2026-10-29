@@ -4,12 +4,40 @@
 
 Use MCP to access InoProShop's public ScriptEngine: create and edit projects, read and write Structured Text, run native builds, save projects, and export software-controller boot applications.
 
+## Engineering operations
+
+A small tool for PLC project work, with a three-axis flying shear example.
+
+| Task | Supported operations |
+|---|---|
+| Create and edit | Create empty project containers, inspect project structure, read and modify ST and project objects |
+| Build and save | Run the native compiler, collect diagnostics, and save projects |
+| Configure and export | Configure devices, tasks, libraries, and symbols; export software-controller boot applications |
+
+## Example: three-axis flying shear
+
+Starting from a user-prepared blank software-controller template, MCP adds three virtual axes, writes the flying shear ST, configures a 10 ms task and 48 interface fields, and runs the native compiler. The user deploys the project to a software PLC through the official workflow.
+
+![Three-axis flying shear: recorded software PLC feedback](https://raw.githubusercontent.com/Polarzin/Inoproshop-MCP/main/docs/assets/flying-shear.gif)
+
+The GIF records a 3D visualization of software PLC feedback. This repository provides the engineering tool and ST example; the 3D interface used for the recording is not included. Build instructions follow below.
+
+Earlier engineering tools were used to verify project reading/writing, compilation, and downloading on our own hardware platform. The current public tool provides offline engineering operations; the flying shear example was verified on a software PLC.
+
 ## Installation
 
 Requires Windows, Node.js ≥ 18, and a compatible InoProShop installation with ScriptEngine support. The engineering baseline is InoProShop 1.9.1.6 / SP11; configure device descriptions and motion components for your installed version. Python worker scripts run in the IDE's own scripting environment.
 
+[Download the tool ZIP](https://github.com/Polarzin/Inoproshop-MCP/archive/refs/heads/main.zip), extract it, and run this in the tool directory:
+
 ```powershell
-git clone https://github.com/Polarzin/Inoproshop-MCP.git
+npm.cmd ci --ignore-scripts
+```
+
+The ZIP contains the tool, required ST example files, and usage instructions; the README demonstration GIF is excluded. To receive updates through Git, clone the repository instead:
+
+```powershell
+git clone --depth 1 https://github.com/Polarzin/Inoproshop-MCP.git
 cd Inoproshop-MCP
 npm.cmd ci --ignore-scripts
 ```
@@ -101,18 +129,6 @@ To export a boot application, run `batch` on the generated project with the step
 - Local results and the lock are stored under `var/`. Failed batches are not automatically replayed. If a timeout leaves the outcome unknown, inspect the IDE and the result referenced by `var/engineering.lock`; resolve the lock only after confirming its IDE has closed.
 - Project creation and template builds require new output paths. `batch` saves changes to existing projects.
 - Obtain vendor software, device descriptions, motion components, native project templates, and licenses from official sources.
-
-## Showcase
-
-The [static showcase source](docs/site/index.html?lang=en) uses existing recorded flying shear media, defaults to Chinese, and supports English. It presents the tool and usage steps without connecting to a PLC.
-
-To preview locally, run this from the repository root (Python 3 required):
-
-```powershell
-python -m http.server 8841 --bind 127.0.0.1
-```
-
-Open the [local showcase](http://127.0.0.1:8841/docs/site/index.html?lang=en).
 
 ## License
 

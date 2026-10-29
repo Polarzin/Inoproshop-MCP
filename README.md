@@ -4,12 +4,40 @@
 
 通过 MCP 调用 InoProShop 的公开 ScriptEngine，创建和编辑工程、读写 ST、执行原生编译、保存和导出软件控制器启动包。
 
+## 支持的工程操作
+
+一个面向 PLC 工程操作的小工具，附三轴飞剪示例。
+
+| 工作 | 支持的操作 |
+|---|---|
+| 创建与编辑 | 创建空工程容器、查看工程结构、读取和修改 ST 及工程对象 |
+| 编译与保存 | 调用原生编译器、获取诊断信息、保存工程 |
+| 配置与导出 | 配置设备、任务、库与符号，导出软件控制器启动包 |
+
+## 示例：三轴飞剪
+
+从用户准备的空白软件控制器模板开始，MCP 添加三根虚拟轴、写入飞剪 ST，配置 10 ms 任务与 48 个接口字段，再执行原生编译。工程由用户按官方流程部署到软件 PLC。
+
+![三轴飞剪示例：软件 PLC 运行反馈录制](https://raw.githubusercontent.com/Polarzin/Inoproshop-MCP/main/docs/assets/flying-shear.gif)
+
+动图是软件 PLC 运行反馈的 3D 可视化录制；仓库提供工程构建工具和 ST 示例，不包含录制用的 3D 界面。构建方法见下方说明。
+
+前期工程工具已在自有硬件平台上验证过工程读写、编译与下载操作。当前公开工具提供离线工程操作；三轴飞剪示例在软件 PLC 上验证。
+
 ## 安装
 
 需要 Windows、Node.js ≥ 18 和带有 ScriptEngine 的兼容 InoProShop。工程接口基线为 InoProShop 1.9.1.6 / SP11；设备描述和运动组件按本机安装版本配置。Python 工作脚本由 IDE 自带的脚本环境执行。
 
+[下载工具 ZIP](https://github.com/Polarzin/Inoproshop-MCP/archive/refs/heads/main.zip)，解压后在工具目录运行：
+
 ```powershell
-git clone https://github.com/Polarzin/Inoproshop-MCP.git
+npm.cmd ci --ignore-scripts
+```
+
+ZIP 包包含工具、必要 ST 示例和使用说明，排除 README 展示动图。需要 Git 更新时，也可克隆仓库：
+
+```powershell
+git clone --depth 1 https://github.com/Polarzin/Inoproshop-MCP.git
 cd Inoproshop-MCP
 npm.cmd ci --ignore-scripts
 ```
@@ -101,18 +129,6 @@ npm.cmd ci --ignore-scripts
 - 本地结果和锁保存在 `var/`。失败不自动重发；超时结果未知时先检查 IDE 与 `var/engineering.lock` 所指的结果，确认对应 IDE 已关闭后再处理锁。
 - 工程创建与模板构建要求新输出路径；`batch` 会保存对已有工程的修改。
 - 厂商软件、设备描述、运动组件、原生工程模板和许可由使用者从官方来源取得。
-
-## 展示页
-
-[静态展示页源码](docs/site/index.html)使用现有飞剪录制素材，默认中文，支持英文切换。页面仅展示工具和使用步骤，不连接 PLC。
-
-本地预览可在仓库根目录运行以下命令（需要 Python 3）：
-
-```powershell
-python -m http.server 8841 --bind 127.0.0.1
-```
-
-打开 [本地展示页](http://127.0.0.1:8841/docs/site/index.html)。
 
 ## 许可
 
