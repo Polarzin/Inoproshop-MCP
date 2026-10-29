@@ -28,21 +28,28 @@ Earlier engineering tools were used to verify project reading/writing, compilati
 
 Requires Windows, Node.js ≥ 18, and a compatible InoProShop installation with ScriptEngine support. The engineering baseline is InoProShop 1.9.1.6 / SP11; configure device descriptions and motion components for your installed version. Python worker scripts run in the IDE's own scripting environment.
 
-[Download the tool ZIP](https://github.com/Polarzin/Inoproshop-MCP/archive/refs/heads/main.zip), extract it, and run this in the tool directory:
+### 1. Get the tool (Git clone recommended)
 
 ```powershell
-npm.cmd ci --ignore-scripts
-```
-
-The ZIP contains the tool, required ST example files, and usage instructions; the README demonstration GIF is excluded. To receive updates through Git, clone the repository instead:
-
-```powershell
-git clone --depth 1 https://github.com/Polarzin/Inoproshop-MCP.git
+git clone https://github.com/Polarzin/Inoproshop-MCP.git
 cd Inoproshop-MCP
+```
+
+If Git is not installed, [download the tool ZIP](https://github.com/Polarzin/Inoproshop-MCP/archive/refs/heads/main.zip) instead. Extract it and open PowerShell in the directory containing `package.json` and `server.mjs`. The ZIP contains the tool, required ST example files, and usage instructions; the README demonstration GIF is excluded.
+
+### 2. Install dependencies
+
+Run this in the tool directory:
+
+```powershell
 npm.cmd ci --ignore-scripts
 ```
 
-Add this configuration to a stdio MCP client and replace the paths with absolute local paths:
+Once dependencies are installed, the tool is ready to configure. No build step or separate Python installation is required. After updating with `git pull`, run the command above again to synchronize dependencies.
+
+### 3. Configure your MCP client
+
+Add a stdio service in your client's MCP settings. For clients that support the `mcpServers` JSON format, merge the configuration below. For a settings form or another configuration format, enter the corresponding command, arguments, and environment variables.
 
 ```json
 {
@@ -58,6 +65,17 @@ Add this configuration to a stdio MCP client and replace the paths with absolute
   }
 }
 ```
+
+- `command`: the Node.js command. If the client cannot find `node`, use the absolute path to `node.exe`; run `(Get-Command node).Source` in PowerShell to find it.
+- `args`: replace the example with the absolute path to `server.mjs` in your downloaded directory.
+- `INOPROSHOP_EXE`: the absolute path to your installed `InoProShop.exe`.
+- `INOPROSHOP_PROFILE`: the IDE profile name for your installation. The example uses 1.9.1.6; check the `--profile` argument in your IDE launch shortcut.
+
+Use `/` in Windows paths within JSON, as above, or escape each backslash as `\\`.
+
+### 4. Enable and check the connection
+
+Save the configuration, then enable or reconnect the MCP service in your client; restart the client if needed. The appearance of `codesys_engineering` in the tool list confirms the MCP connection. Use the examples below for calls. The client starts the service automatically, so there is no need to run `npm start` separately. A successful connection confirms MCP availability; IDE paths, profiles, and project compatibility are checked during actual engineering calls.
 
 Close other IDE instances before normal-mode use. To coexist with an existing IDE, explicitly pass `isolated=true` in the tool arguments. Builds may take several minutes; set the client call timeout to at least 660 seconds.
 

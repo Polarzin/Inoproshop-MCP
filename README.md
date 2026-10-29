@@ -28,21 +28,28 @@
 
 需要 Windows、Node.js ≥ 18 和带有 ScriptEngine 的兼容 InoProShop。工程接口基线为 InoProShop 1.9.1.6 / SP11；设备描述和运动组件按本机安装版本配置。Python 工作脚本由 IDE 自带的脚本环境执行。
 
-[下载工具 ZIP](https://github.com/Polarzin/Inoproshop-MCP/archive/refs/heads/main.zip)，解压后在工具目录运行：
+### 1. 获取工具（推荐 Git clone）
 
 ```powershell
-npm.cmd ci --ignore-scripts
-```
-
-ZIP 包包含工具、必要 ST 示例和使用说明，排除 README 展示动图。需要 Git 更新时，也可克隆仓库：
-
-```powershell
-git clone --depth 1 https://github.com/Polarzin/Inoproshop-MCP.git
+git clone https://github.com/Polarzin/Inoproshop-MCP.git
 cd Inoproshop-MCP
+```
+
+没有安装 Git 时，也可[下载工具 ZIP](https://github.com/Polarzin/Inoproshop-MCP/archive/refs/heads/main.zip)。解压后，在包含 `package.json` 和 `server.mjs` 的目录打开 PowerShell。ZIP 包含工具、必要 ST 示例和使用说明，排除 README 展示动图。
+
+### 2. 安装依赖
+
+在工具目录运行：
+
+```powershell
 npm.cmd ci --ignore-scripts
 ```
 
-将以下配置加入支持 stdio MCP 的客户端，并替换为本机绝对路径：
+依赖安装完成即可配置使用，无需构建，也无需单独安装 Python。以后通过 `git pull` 更新工具后，再运行一次上述命令同步依赖。
+
+### 3. 配置 MCP 客户端
+
+在客户端的 MCP 设置中添加一个 stdio 服务。支持 `mcpServers` JSON 格式的客户端可合并以下配置；使用表单或其他配置格式时，填写对应的命令、参数和环境变量。
 
 ```json
 {
@@ -58,6 +65,17 @@ npm.cmd ci --ignore-scripts
   }
 }
 ```
+
+- `command`：Node.js 启动命令。客户端找不到 `node` 时，填入 `node.exe` 的绝对路径，可在 PowerShell 中运行 `(Get-Command node).Source` 查询。
+- `args`：将示例路径替换为下载目录内 `server.mjs` 的绝对路径。
+- `INOPROSHOP_EXE`：本机 `InoProShop.exe` 的绝对路径。
+- `INOPROSHOP_PROFILE`：本机实际安装的 IDE profile 名称；示例对应 1.9.1.6，可在 IDE 启动快捷方式的 `--profile` 参数中核对。
+
+JSON 中的 Windows 路径建议使用 `/`，如上例；使用反斜杠时需写成 `\\`。
+
+### 4. 启用并确认连接
+
+保存配置后，在客户端启用或重新连接该 MCP 服务；必要时重启客户端。工具列表中出现 `codesys_engineering` 即表示 MCP 已连接，后续按下方示例调用。服务由客户端自动启动，无需另外运行 `npm start`。连接成功只表示 MCP 可用；IDE 路径、profile 和工程兼容性会在实际工程调用时检查。
 
 普通模式使用前关闭其他 IDE。需要与已有 IDE 并存时，在工具参数中显式设置 `isolated=true`。构建可能需要数分钟，客户端调用超时应至少为 660 秒。
 
