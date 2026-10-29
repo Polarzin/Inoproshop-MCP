@@ -10,7 +10,7 @@ A small tool for PLC project work, with a three-axis flying shear example.
 
 | Task | Supported operations |
 |---|---|
-| Create and edit | Create empty project containers, inspect project structure, read and modify ST and project objects |
+| Create and edit | Create empty projects, read/write ST, and manage POUs, methods, properties, DUTs, and project folders |
 | Build and save | Run the native compiler, collect diagnostics, and save projects |
 | Configure and export | Configure devices, tasks, libraries, and symbols; export software-controller boot applications |
 
@@ -93,15 +93,52 @@ Read the project tree and a program:
 }
 ```
 
-Use `tree` to discover actual object paths first. The example program path applies to controller projects containing that program. Supported `batch` operations:
+Use `tree` to discover actual object paths first. Paths use `/` separators and exact matching; the `Application/...` shorthand is accepted only when the Application is unique. Dot-separated paths and recursive same-name fallback are not supported. `read`, `create`, and `write` return full object paths for subsequent calls. Supported `batch` operations:
 
-- Programs and structure: `tree`, `list`, `read`, `read_lines`, `patch`, `write`, `create`.
+- Programs and structure: `tree`, `list`, `read`, `read_lines`, `patch`, `write`, `create`, `rename`, `move`, `delete`.
 - Engineering: `compile`, `save`, `generate_code`, `export_boot`.
 - Devices: `device`, `device_parameters`, `device_parameter_write`, `device_add`, `repository_devices`.
 - Tasks and libraries: `task`, `task_configure`, `libraries`, `library_add`.
 - Symbols: `symbols_create`, `symbols`, `symbol_access`, `verify_symbols`.
 
 `write` accepts `path`, `declaration`, and `implementation`. Before modifying tasks, device parameters, or symbols, read their version/access metadata and pass back the validation fields required by the operation. See [worker_api.py](worker_api.py) for parameter definitions.
+
+### Create and organize objects
+
+`create` accepts `parent`, `name`, and `kind`. An empty `parent` string selects the project root.
+
+| `kind` | Object and optional parameters |
+|---|---|
+| `pou` / `program` / `function` | Function block / program / function; functions accept `return_type`, defaulting to `INT` |
+| `method` | Method; omit `return_type` for no return value |
+| `property` | Property with Get/Set; `return_type` defaults to `INT` |
+| `dut` | Data type; `dut_type` is `structure` (default), `enumeration`, `alias`, or `union`; aliases require `base_type` |
+| `folder` | Project folder |
+| `action` / `gvl` / `task` | Action / global variable list / task |
+
+For example, create a function block, method, and property under an existing Application, then read the property's Get/Set paths:
+
+```json
+{
+  "action": "batch",
+  "isolated": true,
+  "project": "C:/projects/example.project",
+  "steps": [
+    {"op": "create", "args": {"parent": "Application", "name": "SampleFB", "kind": "pou"}},
+    {"op": "create", "args": {"parent": "Application/SampleFB", "name": "Reset", "kind": "method"}},
+    {"op": "create", "args": {"parent": "Application/SampleFB", "name": "Value", "kind": "property", "return_type": "INT"}},
+    {"op": "read", "args": {"path": "Application/SampleFB/Value"}}
+  ]
+}
+```
+
+Use `write` or `patch` on the Get/Set paths returned in `children` to edit property implementations. The property node itself has no ST implementation section. `write` accepts only sections supported by the object and returns their contents after the write.
+
+- Rename: `rename`, with `path` and `name`.
+- Move: `move`, with `path` and the destination `parent`.
+- Delete: `delete`, with `path`; objects with children require explicit `recursive: true`. The result lists removed paths and GUIDs.
+
+Object operations check name conflicts, move cycles, and readback. Compile after renaming or moving to check program references; these operations do not promise automatic refactoring of all ST references. The tool exposes predefined operations and has no arbitrary IronPython execution endpoint.
 
 ## Optional: build the flying shear example
 
@@ -133,3 +170,5 @@ To export a boot application, run `batch` on the generated project with the step
 ## License
 
 Independently developed. Original tool code and synthetic ST are [MIT licensed](LICENSE). See [NOTICE](NOTICE.md) for third-party dependencies and interoperability information.
+
+API reference: [CODESYS ScriptEngine documentation](https://content.helpme-codesys.com/en/ScriptingEngine/index.html).

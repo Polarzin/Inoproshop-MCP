@@ -10,7 +10,7 @@
 
 | 工作 | 支持的操作 |
 |---|---|
-| 创建与编辑 | 创建空工程容器、查看工程结构、读取和修改 ST 及工程对象 |
+| 创建与编辑 | 创建空工程容器、读写 ST、管理 POU/Method/Property/DUT 与工程文件夹 |
 | 编译与保存 | 调用原生编译器、获取诊断信息、保存工程 |
 | 配置与导出 | 配置设备、任务、库与符号，导出软件控制器启动包 |
 
@@ -93,15 +93,52 @@ npm.cmd ci --ignore-scripts
 }
 ```
 
-先通过 `tree` 获取实际对象路径；上述程序路径适用于包含该程序的控制器工程。`batch` 可用操作包括：
+先通过 `tree` 获取实际对象路径。路径使用 `/` 分隔并精确匹配；`Application/...` 简写仅在 Application 唯一时可用。不支持点分隔路径或递归同名回退。`read`、`create`、`write` 返回完整对象路径，后续调用可直接复用。`batch` 可用操作包括：
 
-- 程序与结构：`tree`、`list`、`read`、`read_lines`、`patch`、`write`、`create`。
+- 程序与结构：`tree`、`list`、`read`、`read_lines`、`patch`、`write`、`create`、`rename`、`move`、`delete`。
 - 工程：`compile`、`save`、`generate_code`、`export_boot`。
 - 设备：`device`、`device_parameters`、`device_parameter_write`、`device_add`、`repository_devices`。
 - 任务与库：`task`、`task_configure`、`libraries`、`library_add`。
 - 符号：`symbols_create`、`symbols`、`symbol_access`、`verify_symbols`。
 
 `write` 使用 `path`、`declaration` 和 `implementation`。修改任务、设备参数或符号前，先读取对应版本/权限信息，并传回操作要求的校验字段。各操作参数定义见 [worker_api.py](worker_api.py)。
+
+### 对象创建与整理
+
+`create` 使用 `parent`、`name`、`kind`；`parent` 为空字符串时表示工程根节点。
+
+| `kind` | 对象与可选参数 |
+|---|---|
+| `pou` / `program` / `function` | 功能块 / 程序 / 函数；函数可指定 `return_type`，默认 `INT` |
+| `method` | 方法；可指定 `return_type`，省略表示无返回值 |
+| `property` | 属性及 Get/Set；`return_type` 默认 `INT` |
+| `dut` | 数据类型；`dut_type` 为 `structure`（默认）、`enumeration`、`alias` 或 `union`；别名类型需 `base_type` |
+| `folder` | 工程文件夹 |
+| `action` / `gvl` / `task` | 动作 / 全局变量列表 / 任务 |
+
+例如，在已有 Application 中创建功能块、方法和属性，读取属性的 Get/Set 路径：
+
+```json
+{
+  "action": "batch",
+  "isolated": true,
+  "project": "C:/projects/example.project",
+  "steps": [
+    {"op": "create", "args": {"parent": "Application", "name": "SampleFB", "kind": "pou"}},
+    {"op": "create", "args": {"parent": "Application/SampleFB", "name": "Reset", "kind": "method"}},
+    {"op": "create", "args": {"parent": "Application/SampleFB", "name": "Value", "kind": "property", "return_type": "INT"}},
+    {"op": "read", "args": {"path": "Application/SampleFB/Value"}}
+  ]
+}
+```
+
+对返回的 `children` 中 Get/Set 路径执行 `write` 或 `patch` 可编辑属性实现；属性节点本身没有 ST 实现段。`write` 只接受对象实际具有的声明/实现段，并返回写后内容。
+
+- 重命名：`rename`，参数 `path`、`name`。
+- 移动：`move`，参数 `path`、目标 `parent`。
+- 删除：`delete`，参数 `path`；有子对象时需显式传入 `recursive: true`，结果列出删除的路径和 GUID。
+
+创建或整理对象时会检查目标重名、移动环路和写后结果。重命名、移动后请编译检查程序引用；接口不承诺自动重构所有 ST 引用。工具仅提供固定操作，不提供任意 IronPython 脚本执行入口。
 
 ## 可选：构建飞剪示例
 
@@ -133,3 +170,5 @@ npm.cmd ci --ignore-scripts
 ## 许可
 
 个人独立开发，自有工具代码与合成 ST 采用 [MIT](LICENSE)。第三方依赖和互操作说明见 [NOTICE](NOTICE.md)。
+
+接口依据：[CODESYS ScriptEngine 文档](https://content.helpme-codesys.com/en/ScriptingEngine/index.html)。
