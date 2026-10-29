@@ -37,42 +37,6 @@ def find_app(project):
         pass
     return None
 
-def find_by_path(project, full_path):
-    """按 'Application/Folder/POU' 路径定位(斜杠或点分隔; 首段可为 Application 名; 末段失败回退递归 find)."""
-    norm = full_path.replace("\\", "/").strip("/").replace(".", "/")
-    parts = [p for p in norm.split("/") if p]
-    if not parts:
-        return None
-    app = find_app(project)
-    app_name = (obj_name(app) or "Application").lower() if app else ""
-    current = project
-    if app and parts[0].lower() == app_name:
-        current = app
-        parts = parts[1:]
-        if not parts:
-            return app
-    for i, part in enumerate(parts):
-        is_last = (i == len(parts) - 1)
-        found = None
-        try:
-            for child in current.get_children(False):
-                if obj_name(child) == part:
-                    found = child
-                    break
-        except Exception:
-            pass
-        if (found is None) and is_last:
-            try:
-                rec = list(current.find(part, True))
-                if rec:
-                    found = rec[0]
-            except Exception:
-                pass
-        if found is None:
-            return None
-        current = found
-    return current
-
 def walk_pous(node, prefix, out, want_textual):
     try:
         children = list(node.get_children(False))
@@ -91,12 +55,17 @@ def walk_pous(node, prefix, out, want_textual):
 
 def find_exact_path(project, path):
     """New tools use explicit slash paths; never fall back to a same-name descendant."""
+    if not isinstance(path, basestring):
+        raise ValueError("An explicit object path is required")
     parts = path.replace("\\", "/").strip("/").split("/")
     if not parts or any(not p for p in parts):
         raise ValueError("An explicit object path is required")
     current = project
     app = find_app(project)
-    if app is not None and parts[0] == obj_name(app):
+    root_matches = [c for c in project.get_children(False) if obj_name(c) == parts[0]]
+    if not root_matches and app is not None and parts[0] == obj_name(app):
+        if len(list(project.find(parts[0], True))) != 1:
+            raise ValueError("Application alias is ambiguous; use the full tree path")
         current, parts = app, parts[1:]
     for part in parts:
         matches = [c for c in current.get_children(False) if obj_name(c) == part]
@@ -352,49 +321,58 @@ def op_list(project, args):
     return {"pous": out, "count": len(out)}
 
 def op_read(project, args):
-    path = args["path"]
-    obj = find_by_path(project, path)
-    if obj is None:
-        raise RuntimeError("POU 未找到: %s" % path)
-    decl = u""
-    impl = u""
-    if has_attr_true(obj, "has_textual_declaration"):
-        decl = obj.textual_declaration.text
-    if has_attr_true(obj, "has_textual_implementation"):
-        impl = obj.textual_implementation.text
-    return {"path": path, "name": obj_name(obj), "declaration": decl, "implementation": impl,
-            "has_decl": has_attr_true(obj, "has_textual_declaration"),
-            "has_impl": has_attr_true(obj, "has_textual_implementation")}
+    return object_record(find_exact_path(project, args["path"]))
 
 def op_write(project, args):
-    path = args["path"]
-    obj = find_by_path(project, path)
-    if obj is None:
-        raise RuntimeError("POU 未找到: %s" % path)
-    updated = []
-    decl = args.get("declaration", None)
-    impl = args.get("implementation", None)
-    if decl is not None and has_attr_true(obj, "has_textual_declaration"):
-        obj.textual_declaration.replace(decl)
-        updated.append("declaration")
-    if impl is not None and has_attr_true(obj, "has_textual_implementation"):
-        obj.textual_implementation.replace(impl)
-        updated.append("implementation")
-    saved = False
-    if args.get("save", False) and updated:
+    obj = find_exact_path(project, args["path"])
+    expected = {}
+    # Validate both sections before the first edit. Property Get/Set are child paths.
+    for section in ("declaration", "implementation"):
+        if section not in args:
+            continue
+        value = args[section]
+        if not isinstance(value, basestring):
+            raise ValueError("%s must be text" % section)
+        if not has_attr_true(obj, "has_textual_" + section):
+            raise ValueError("Object has no textual %s; use the Get/Set child path for a property" % section)
+        doc = getattr(obj, "textual_" + section)
+        newline = u"\r\n" if u"\r\n" in unicode(doc.text) else u"\n"
+        expected[section] = value.replace(u"\r\n", u"\n").replace(u"\r", u"\n").replace(u"\n", newline)
+    if not expected:
+        raise ValueError("Provide declaration and/or implementation")
+    for section, value in expected.items():
+        getattr(obj, "textual_" + section).replace(value)
+    after = op_read(project, args)
+    if any(after[section] != value for section, value in expected.items()):
+        raise RuntimeError("Write executed but readback differs; inspect current text before retrying")
+    saved = bool(args.get("save", False))
+    if saved:
         project.save()
-        saved = True
-    return {"path": path, "updated": updated, "saved": saved}
+    after.update(updated=sorted(expected), saved=saved)
+    return after
 
-def _create_child(parent, kind, name, language):
+def _create_child(parent, kind, name, language, args=None):
     """使用原生签名，只创建 ST；不以捕获 TypeError 重试有副作用的创建。"""
     if language not in (None, "ST"):
         raise ValueError("Only ST is supported")
     if kind == "action":
         return parent.create_action(name)
-    if kind in ("pou", "program"):
+    args = args or {}
+    if kind in ("pou", "program", "function"):
         # 本机 CHM: create_pou(name, type=FunctionBlock, language=None, ...)
+        if kind == "function":
+            return parent.create_pou(name, type=PouType.Function, return_type=args.get("return_type", "INT"))
         return parent.create_pou(name, type=PouType.Program if kind == "program" else PouType.FunctionBlock)
+    if kind == "method":
+        return parent.create_method(name, return_type=args.get("return_type"))
+    if kind == "property":
+        return parent.create_property(name, return_type=args.get("return_type", "INT"))
+    if kind == "dut":
+        types = {"structure": DutType.Structure, "enumeration": DutType.Enumeration,
+                 "alias": DutType.Alias, "union": DutType.Union}
+        return parent.create_dut(name, type=types[args.get("dut_type", "structure")], baseType=args.get("base_type"))
+    if kind == "folder":
+        return parent.create_folder(name)
     if kind == "gvl":
         return parent.create_gvl(name)
     if kind == "task":
@@ -533,44 +511,158 @@ def op_symbols_create(project, args):
             "saved": args.get("save", False), "online_verified": False}
 
 def op_create(project, args):
-    """在已有 POU 下新建 Action(或在 Application 下新建 POU).
+    """Create one ST object under an exact parent (empty parent means project root).
 
-    功能:
-        补上 op_write 的空缺 —— write 只能改已存在的对象, 新增原子动作(如 PLC_PRG 下
-        的 DemoAction)此前只能人工在 InoProShop 里点。建完的对象正文为空, 由随后的
-        write 填 ST。
-    参数:
-        args["parent"]: 父对象路径, 如 Application/PLC_PRG
-        args["name"]:   新对象名, 如 DemoAction
-        args["kind"]:   action(默认) | pou(FunctionBlock) | program | gvl | task
-        args["language"]: 只支持 ST；省略使用原生 ST 默认值
-        args["save"]:   是否立即 project.save(), 默认 False
-    返回:
-        {"path","name","created","saved","has_decl","has_impl"};
-        精确父对象下已有同名对象时拒绝创建，调用方应先检查已有结果。
+    kind: action (default), pou (FB), program, function, method, property, dut,
+    folder, gvl, task. return_type applies to function/method/property;
+    dut_type is structure/enumeration/alias/union; base_type is the DUT base.
+    Property Get/Set are reported as children and edited with read/write/patch.
     """
     parent_path = args["parent"]
     name = args["name"]
     kind = args.get("kind") or "action"
-    if kind not in ("action", "pou", "program", "gvl", "task"):
+    if kind not in ("action", "pou", "program", "function", "method", "property", "dut", "folder", "gvl", "task"):
         raise ValueError("Unsupported object kind")
     if args.get("language") not in (None, "ST"):
         raise ValueError("Only ST is supported")
-    parent = find_exact_path(project, parent_path) if parent_path else project
+    validate_object_name(name, kind == "folder")
+    for field in ("return_type", "base_type"):
+        if field in args and (not isinstance(args[field], basestring) or not args[field].strip()):
+            raise ValueError("%s must be nonempty text when provided" % field)
+    if "return_type" in args and kind not in ("function", "method", "property"):
+        raise ValueError("return_type applies only to function/method/property")
+    if ("dut_type" in args or "base_type" in args) and kind != "dut":
+        raise ValueError("dut_type/base_type apply only to dut")
+    if kind == "dut" and args.get("dut_type", "structure") not in ("structure", "enumeration", "alias", "union"):
+        raise ValueError("dut_type must be structure, enumeration, alias or union")
+    parent = object_parent(project, parent_path)
+    require_free_name(parent, name)
+    # Some native factories return void; read the child from its exact parent.
+    _create_child(parent, kind, name, args.get("language"), args)
+    full = child_path(parent, name)
+    after = op_read(project, {"path": full})
+    after.update(created=True, saved=save_if_requested(project, args))
+    return after
 
-    full = parent_path.rstrip("/") + "/" + name if parent_path else name
-    existing = direct_child(parent, name)
-    if existing is not None:
-        raise ValueError("Object already exists; inspect its kind before reuse")
 
-    obj = _create_child(parent, kind, name, args.get("language"))
-    saved = False
-    if args.get("save", False):
+def object_path(obj):
+    parts = []
+    while not obj.is_root:
+        parts.append(obj_name(obj))
+        obj = obj.parent
+    return "/".join(reversed(parts))
+
+
+def object_parent(project, path):
+    if not isinstance(path, basestring):
+        raise ValueError("parent must be a path string (empty for project root)")
+    return find_exact_path(project, path) if path else project
+
+
+def child_path(parent, name):
+    prefix = object_path(parent)
+    return prefix + "/" + name if prefix else name
+
+
+def object_record(obj):
+    """Finite offline snapshot; never evaluates caller-supplied attributes/code."""
+    result = {"path": object_path(obj), "name": obj_name(obj), "guid": unicode(obj.guid),
+              "is_folder": has_attr_true(obj, "is_folder"),
+              "children": [{"path": child_path(obj, obj_name(c)), "name": obj_name(c),
+                            "guid": unicode(c.guid)} for c in obj.get_children(False)]}
+    for section, flag in (("declaration", "has_decl"), ("implementation", "has_impl")):
+        result[flag] = has_attr_true(obj, "has_textual_" + section)
+        result[section] = unicode(getattr(obj, "textual_" + section).text) if result[flag] else u""
+    return result
+
+
+def validate_object_name(name, folder=False):
+    if not isinstance(name, basestring) or not name or name != name.strip():
+        raise ValueError("name must be nonempty text without surrounding whitespace")
+    if folder:
+        if name in (".", "..") or any(c in name for c in ("/", "\\")) or any(ord(c) < 32 for c in name):
+            raise ValueError("Folder name must be one path segment")
+    elif not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", name):
+        raise ValueError("name must be an IEC identifier")
+
+
+def require_free_name(parent, name, exclude=None):
+    # IEC identifiers are case insensitive even when the displayed path is not.
+    if any(obj_name(c).lower() == name.lower() and unicode(c.guid) != exclude
+           for c in parent.get_children(False)):
+        raise ValueError("Target name already exists (case insensitive)")
+
+
+def save_if_requested(project, args):
+    saved = bool(args.get("save", False))
+    if saved:
         project.save()
-        saved = True
-    return {"path": full, "name": obj_name(obj), "created": True, "saved": saved,
-            "has_decl": has_attr_true(obj, "has_textual_declaration"),
-            "has_impl": has_attr_true(obj, "has_textual_implementation")}
+    return saved
+
+
+def op_rename(project, args):
+    obj = find_exact_path(project, args["path"])
+    name = args["name"]
+    validate_object_name(name, has_attr_true(obj, "is_folder"))
+    parent, guid, old_path = obj.parent, unicode(obj.guid), object_path(obj)
+    require_free_name(parent, name, guid)
+    changed = obj_name(obj) != name
+    if changed:
+        obj.rename(name)
+    after = op_read(project, {"path": child_path(parent, name)})
+    if after["guid"] != guid:
+        raise RuntimeError("Rename executed but identity readback differs; inspect before retry")
+    after.update(old_path=old_path, changed=changed, saved=save_if_requested(project, args))
+    return after
+
+
+def op_move(project, args):
+    obj = find_exact_path(project, args["path"])
+    parent = object_parent(project, args["parent"])
+    guid, old_path, old_parent = unicode(obj.guid), object_path(obj), obj.parent
+    ancestor = parent
+    while not ancestor.is_root:
+        if unicode(ancestor.guid) == guid:
+            raise ValueError("Cannot move an object into itself or its descendant")
+        ancestor = ancestor.parent
+    require_free_name(parent, obj_name(obj), guid)
+    changed = object_path(old_parent) != object_path(parent)
+    name = obj_name(obj)
+    if changed:
+        obj.move(parent)
+    after = op_read(project, {"path": child_path(parent, name)})
+    if after["guid"] != guid or (changed and any(unicode(c.guid) == guid for c in old_parent.get_children(False))):
+        raise RuntimeError("Move executed but location/identity readback differs; inspect before retry")
+    after.update(old_path=old_path, changed=changed, saved=save_if_requested(project, args))
+    return after
+
+
+def op_delete(project, args):
+    """Delete exactly this object; descendants require recursive=true.
+
+    Read/tree first to inspect scope. The receipt lists every removed path/GUID.
+    No recursive name lookup, no repeated remove after an unknown result.
+    """
+    recursive = args.get("recursive", False)
+    if not isinstance(recursive, bool):
+        raise ValueError("recursive must be boolean")
+    obj = find_exact_path(project, args["path"])
+    parent, guid, path = obj.parent, unicode(obj.guid), object_path(obj)
+    children = list(obj.get_children(False))
+    if children and not recursive:
+        raise ValueError("Object has children; read/tree its scope and set recursive=true to delete the subtree")
+    removed = []
+    def collect(node):
+        removed.append({"path": object_path(node), "guid": unicode(node.guid)})
+        for child in node.get_children(False):
+            collect(child)
+    collect(obj)
+    obj.remove()
+    if any(unicode(c.guid) == guid or obj_name(c) == removed[0]["path"].split("/")[-1]
+           for c in parent.get_children(False)):
+        raise RuntimeError("Delete executed but object is still present; inspect before retry")
+    return {"path": path, "deleted": True, "recursive": recursive, "removed": removed,
+            "removed_count": len(removed), "saved": save_if_requested(project, args)}
 
 def _collect_compile_messages():
     """Collect the current compiler-category messages without starting a build."""

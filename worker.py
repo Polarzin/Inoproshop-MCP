@@ -109,7 +109,7 @@ def main():
         if request['action'] == 'build_c6':
             result['engineering'] = build_c6(project, request)
         elif request['action'] == 'batch':
-            allowed = set('tree list read read_lines patch write create compile save device device_parameters device_parameter_write device_add repository_devices task task_configure libraries library_add symbols_create symbols symbol_access verify_symbols generate_code export_boot'.split())
+            allowed = set('tree list read read_lines patch write create rename move delete compile save device device_parameters device_parameter_write device_add repository_devices task task_configure libraries library_add symbols_create symbols symbol_access verify_symbols generate_code export_boot'.split())
             for step in request['steps']:
                 if step['op'] not in allowed:
                     raise ValueError('Unsupported offline operation: ' + step['op'])
