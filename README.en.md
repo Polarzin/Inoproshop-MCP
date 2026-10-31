@@ -1,28 +1,38 @@
-# InoProShop MCP
+# InoProShop MCP: bring AI into PLC engineering
 
 [中文](README.md) · English
 
-Use MCP to access InoProShop's public ScriptEngine: create and edit projects, read and write Structured Text, run native builds, save projects, and export software-controller boot applications.
+Describe what you need in natural language, and let AI read projects, write Structured Text (ST), configure devices and tasks, and check the results with InoProShop's native compiler.
 
-## Engineering operations
+InoProShop MCP connects these engineering operations to standard MCP clients through the public ScriptEngine API, bringing code editing, project configuration, and compilation into the same conversation.
 
-A small tool for PLC project work, with a three-axis flying shear example.
+[Installation and setup](#installation) · [Tool interface](#tool-codesys_engineering) · [Build the flying shear example](#optional-build-the-flying-shear-example)
 
-| Task | Supported operations |
-|---|---|
-| Create and edit | Create empty projects, read/write ST, and manage POUs, methods, properties, DUTs, and project folders |
-| Build and save | Run the native compiler, collect diagnostics, and save projects |
-| Configure and export | Configure devices, tasks, libraries, and symbols; export software-controller boot applications |
+## From code to project configuration
 
-## Example: three-axis flying shear
+- **Project management**: create and open projects, inspect the full object tree, make batch changes, and save; create, rename, move, and delete project objects.
+- **ST development**: read existing code, edit declarations and implementations, and make targeted replacements. Work with programs, functions, function blocks, methods, properties with Get/Set, global variables, and data types such as structures and enumerations.
+- **Device and task configuration**: query locally installed device descriptions, add devices, read and write device parameters, configure task cycles, priorities, and program calls, and manage libraries and variable symbols.
+- **Native compilation and export**: run the InoProShop compiler and collect actual errors and warnings for AI to diagnose and correct; save projects and export software-controller boot applications.
+- **Complex motion control**: write, modify, configure, and compile ST control logic for applications such as flying shears, electronic gearing/cams, and CNC.
 
-Starting from a user-prepared blank software-controller template, MCP adds three virtual axes, writes the flying shear ST, configures a 10 ms task and 48 interface fields, and runs the native compiler. The user deploys the project to a software PLC through the official workflow.
+For example, give your AI assistant a task like this:
 
-![Three-axis flying shear: recorded software PLC feedback](https://raw.githubusercontent.com/Polarzin/Inoproshop-MCP/main/docs/assets/flying-shear.gif)
+> Read the project structure and existing code. Add a function block with start, stop, and interlock logic, configure a cyclic task, compile and fix any diagnostics, then save the project.
 
-The GIF records a 3D visualization of software PLC feedback. This repository provides the engineering tool and ST example; the 3D interface used for the recording is not included. Build instructions follow below.
+## Three-axis flying shear: a complete project-building example
 
-Earlier engineering tools were used to verify project reading/writing, compilation, and downloading on our own hardware platform. The current public tool provides offline engineering operations; the flying shear example was verified on a software PLC.
+The repository includes original flying shear ST code and an automated project builder. Starting from a prepared blank software-controller template, it adds three virtual axes, writes the control program, configures a 10 ms cyclic task and 48 interface fields, then runs native compilation and symbol checks.
+
+The demonstration uses actual software PLC feedback to show material feeding, carriage catch-up and synchronization, cutting, and return motion. The 3D scene makes the coordinated movement of all three axes visible.
+
+![Three-axis flying shear: 3D demonstration of software PLC feedback](https://raw.githubusercontent.com/Polarzin/Inoproshop-MCP/main/docs/assets/flying-shear.gif)
+
+[See how to build and run the example →](#optional-build-the-flying-shear-example)
+
+## Hardware experience
+
+Earlier engineering tools were used to verify project reading/writing, compilation, and downloading on our own hardware platform. The flying shear example in the current public version was verified on a software PLC.
 
 ## Installation
 
@@ -190,3 +200,5 @@ To export a boot application, run `batch` on the generated project with the step
 Independently developed. Original tool code and synthetic ST are [MIT licensed](LICENSE). See [NOTICE](NOTICE.md) for third-party dependencies and interoperability information.
 
 API reference: [CODESYS ScriptEngine documentation](https://content.helpme-codesys.com/en/ScriptingEngine/index.html).
+
+Try it out, open an issue, or contribute.
