@@ -4,10 +4,35 @@ import {spawn,execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
 const root=path.dirname(fileURLToPath(import.meta.url));
+export const SERVO_TYPES=['BOOL','SINT','USINT','INT','UINT','DINT','UDINT','LINT','ULINT','REAL','LREAL','BYTE','WORD','DWORD','LWORD'];
+
+function validateServo(request) {
+  if(!['read','write','dictionary','startup'].includes(request.operation)) throw new Error('Unknown servo operation');
+  if(typeof request.path!=='string' || !request.path.trim()) throw new Error('An exact device path is required');
+  if(request.connector_id!==undefined && (typeof request.connector_id!=='string' || !request.connector_id))
+    throw new Error('connector_id must be a nonempty string');
+  if(request.data_type!==undefined && !SERVO_TYPES.includes(request.data_type)) throw new Error('Unsupported SDO data_type');
+  for(const [field,min,max] of [['index',1,65535],['subindex',0,255],['offset',0,Number.MAX_SAFE_INTEGER],['limit',1,200]]) {
+    if(request[field]!==undefined && (!Number.isInteger(request[field]) || request[field]<min || request[field]>max))
+      throw new Error(`${field} must be an integer in ${min}..${max}`);
+  }
+  if(request.query!==undefined && typeof request.query!=='string') throw new Error('query must be a string');
+  if(['read','write'].includes(request.operation) && (request.index===undefined || request.subindex===undefined))
+    throw new Error('read/write require index and subindex');
+  if(request.operation==='write') {
+    if(!SERVO_TYPES.includes(request.data_type) || typeof request.value!=='string' || !request.value.trim())
+      throw new Error('write requires data_type and a value string');
+    if(typeof request.expected_raw_hex!=='string' || !/^(?:[0-9a-fA-F]{2})+$/.test(request.expected_raw_hex))
+      throw new Error('write requires expected_raw_hex from the preceding read');
+    if(typeof request.expected_address!=='string' || !request.expected_address.trim())
+      throw new Error('write requires expected_address from the preceding read');
+  }
+  if(['steps','axis','template'].some(key=>key in request)) throw new Error('Servo calls cannot contain engineering steps or templates');
+}
 
 export function validateRequest(request) {
-  if(!request || !['create_empty','batch','build_c6'].includes(request.action)) throw new Error('Unknown offline action');
-  if(!path.isAbsolute(request.project) || !request.project.toLowerCase().endsWith('.project'))
+  if(!request || !['create_empty','batch','build_c6','servo'].includes(request.action)) throw new Error('Unknown action');
+  if(typeof request.project!=='string' || !path.isAbsolute(request.project) || !request.project.toLowerCase().endsWith('.project'))
     throw new Error('An absolute .project path is required');
   if(request.template && (!path.isAbsolute(request.template) || !request.template.toLowerCase().endsWith('.project')))
     throw new Error('An absolute local .project template is required');
@@ -21,6 +46,7 @@ export function validateRequest(request) {
     throw new Error('Template and output must be different paths');
   if(request.action==='batch' && (!Array.isArray(request.steps) || !request.steps.length || request.steps.length>200))
     throw new Error('Provide 1..200 offline steps');
+  if(request.action==='servo') validateServo(request);
   return request;
 }
 
@@ -34,7 +60,7 @@ export async function runEngineering(request, {exe, profile, timeoutMs=600000}={
   if(process.platform==='win32' && !request.isolated) {
     const {stdout}=await promisify(execFile)('powershell.exe',['-NoProfile','-Command',
       '@(Get-Process InoProShop,CODESYS -ErrorAction SilentlyContinue).Count'],{windowsHide:true,timeout:15000});
-    if(stdout.trim()!=='0') throw new Error('Another IDE is open; close it yourself before running an offline batch');
+    if(stdout.trim()!=='0') throw new Error('Another IDE is open; close it yourself before running a new IDE session');
   }
   await fs.mkdir(path.join(root,'var'),{recursive:true});
   // A failed/timeout batch is never retried. The lock persists if IDE exit is unknown.

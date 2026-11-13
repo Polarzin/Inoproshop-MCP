@@ -1,13 +1,14 @@
 {
   "name": "inoproshop-codesys-mcp",
   "version": "0.1.0",
-  "description": "MCP interface for offline InoProShop ScriptEngine engineering operations",
+  "description": "MCP interface for InoProShop engineering and EtherCAT servo parameters",
   "type": "module",
   "bin": {
     "inoproshop-codesys-mcp": "./server.mjs"
   },
   "scripts": {
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "test": "node --test tests/servo.test.mjs"
   },
   "engines": {
     "node": ">=18.0.0"

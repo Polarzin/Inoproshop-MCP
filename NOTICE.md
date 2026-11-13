@@ -6,6 +6,8 @@ Vendor software, device descriptions, motion libraries, native projects, runtime
 
 InoProShop and CODESYS names identify interoperability targets. This is an independently developed project, not an official vendor product. The project license grants no rights to vendor software or trademarks.
 
+Offline engineering uses the public ScriptEngine. The EtherCAT servo adapter calls CoE interfaces through reflection in the user's locally installed InoProShop 1.9.1.6 / SP11 plugins. This repository distributes original interoperability code, not vendor assemblies or decompiled vendor source. That adapter's compatibility is specific to the stated installed-plugin baseline.
+
 The README GIF records an original synthetic flying shear demonstration with software PLC feedback. The recording is stored in the repository and excluded from source download archives.
 
 Direct dependencies are installed separately and retain their own licenses and notices:

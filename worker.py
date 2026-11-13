@@ -106,7 +106,20 @@ def main():
                 project = projects.create(PROJECT_PATH, True)
         else:
             project = projects.open(PROJECT_PATH, u'', True)
-        if request['action'] == 'build_c6':
+        if request['action'] == 'servo':
+            api_path = os.path.join(request['root'], 'servo_api.py')
+            with codecs.open(api_path, 'r', 'utf-8') as stream:
+                eval(compile(stream.read(), api_path, 'exec'), globals())
+            handlers = {'read':op_online_sdo_read, 'write':op_online_sdo_write,
+                        'dictionary':op_sdo_dictionary, 'startup':op_servo_startup}
+            operation = request.get('operation')
+            if operation not in handlers:
+                raise ValueError('Unsupported servo operation: ' + unicode(operation))
+            value = handlers[operation](project, request)
+            result['servo'] = value
+            result['online_verified'] = bool(value.get('online_verified', False))
+            result['ok'] = value.get('success') is True
+        elif request['action'] == 'build_c6':
             result['engineering'] = build_c6(project, request)
         elif request['action'] == 'batch':
             allowed = set('tree list read read_lines patch write create rename move delete compile save device device_parameters device_parameter_write device_add repository_devices task task_configure libraries library_add symbols_create symbols symbol_access verify_symbols generate_code export_boot'.split())
@@ -117,13 +130,14 @@ def main():
                 result['steps'].append({'op':step['op'], 'result':value})
                 if isinstance(value, dict) and value.get('error_count', 0):
                     raise ValueError('Compiler errors; inspect diagnostics')
-        project.save()
-        result['ok'] = True
+        if request['action'] != 'servo':
+            project.save()
+            result['ok'] = True
     except Exception as exc:
         result['error'] = unicode(repr(exc))
         result['trace'] = unicode(traceback.format_exc())
         # Preserve partial offline edits for diagnosis; no automatic rebuild/retry.
-        if project is not None:
+        if project is not None and request['action'] != 'servo':
             try:
                 project.save()
             except Exception:

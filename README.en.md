@@ -4,9 +4,9 @@
 
 Describe what you need in natural language, and let AI read projects, write Structured Text (ST), configure devices and tasks, and check the results with InoProShop's native compiler.
 
-InoProShop MCP connects these engineering operations to standard MCP clients through the public ScriptEngine API, bringing code editing, project configuration, and compilation into the same conversation.
+InoProShop MCP connects these engineering operations to standard MCP clients through the public ScriptEngine API, bringing code editing, project configuration, and compilation into the same conversation. Online drive parameters use a separate adapter for the locally installed CoE plugin.
 
-[Installation and setup](#installation) · [Tool interface](#tool-codesys_engineering) · [Build the flying shear example](#optional-build-the-flying-shear-example)
+[Installation and setup](#installation) · [Engineering interface](#tool-codesys_engineering) · [Servo parameters](#tool-codesys_servo) · [Build the flying shear example](#optional-build-the-flying-shear-example)
 
 ## From code to project configuration
 
@@ -14,6 +14,7 @@ InoProShop MCP connects these engineering operations to standard MCP clients thr
 - **ST development**: read existing code, edit declarations and implementations, and make targeted replacements. Work with programs, functions, function blocks, methods, properties with Get/Set, global variables, and data types such as structures and enumerations.
 - **Device and task configuration**: query locally installed device descriptions, add devices, read and write device parameters, configure task cycles, priorities, and program calls, and manage libraries and variable symbols.
 - **Native compilation and export**: run the InoProShop compiler and collect actual errors and warnings for AI to diagnose and correct; save projects and export software-controller boot applications.
+- **Servo parameters**: online SDO reads/writes, ESI dictionary metadata, and project startup comparison, with units interpreted from the drive manual.
 - **Complex motion control**: write, modify, configure, and compile ST control logic for applications such as flying shears, electronic gearing/cams, and CNC.
 
 For example, give your AI assistant a task like this:
@@ -85,7 +86,7 @@ Use `/` in Windows paths within JSON, as above, or escape each backslash as `\\`
 
 ### 4. Enable and check the connection
 
-Save the configuration, then enable or reconnect the MCP service in your client; restart the client if needed. The appearance of `codesys_engineering` in the tool list confirms the MCP connection. Use the examples below for calls. The client starts the service automatically, so there is no need to run `npm start` separately. A successful connection confirms MCP availability; IDE paths, profiles, and project compatibility are checked during actual engineering calls.
+Save the configuration, then enable or reconnect the MCP service in your client; restart the client if needed. The appearance of `codesys_engineering` and `codesys_servo` in the tool list confirms the MCP connection. Use the examples below for calls. The client starts the service automatically, so there is no need to run `npm start` separately. A successful connection confirms MCP availability; IDE paths, profiles, and project compatibility are checked during actual engineering calls.
 
 Close other IDE instances before normal-mode use. To coexist with an existing IDE, explicitly pass `isolated=true` in the tool arguments. Builds may take several minutes; set the client call timeout to at least 660 seconds.
 
@@ -168,6 +169,62 @@ Use `write` or `patch` on the Get/Set paths returned in `children` to edit prope
 
 Object operations check name conflicts, move cycles, and readback. Compile after renaming or moving to check program references; these operations do not promise automatic refactoring of all ST references. The tool exposes predefined operations and has no arbitrary IronPython execution endpoint.
 
+## Tool: `codesys_servo`
+
+Uses the controller communication path saved in the project to access one EtherCAT slave through the installed native CoE service. Configure the correct communication path in the IDE, save, and close the project before calling this tool. To coexist with another IDE, use a separate project copy and `isolated=true`. Each call executes one request and closes its own IDE afterward.
+
+| `action` | Purpose | Main arguments |
+|---|---|---|
+| `dictionary` | Read installed ESI names, types, bit widths, and access attributes | Filter with `query` or `index`; page with `offset` / `limit` |
+| `startup` | Read the project's startup SDO list | `path`, `connector_id` |
+| `read` | Upload one online SDO, returning raw bytes, decoded value, and read time | `index`, `subindex`, optional `data_type` |
+| `write` | Check the current value, download one parameter, and read it back | `index`, `subindex`, `data_type`, `value`, `expected_raw_hex`, `expected_address` |
+
+Every operation requires an absolute `.project` path in `project` and the exact device path in `path`. `connector_id` defaults to `"1"`; use the actual device configuration. Pass indices as decimal integers, for example `0x609A = 24730`. To read a drive's homing acceleration object:
+
+```json
+{
+  "action": "read",
+  "project": "C:/projects/machine.project",
+  "path": "Device/EtherCAT/Drive",
+  "index": 24730,
+  "subindex": 0,
+  "data_type": "UDINT"
+}
+```
+
+Change `action` to `dictionary` to inspect that object's ESI definition, or to `startup` to read the project's startup list and compare matching `index/subindex` entries. ESI defaults and startup values are project configuration, not online values. Receipts identify their scope with `scope` and `online_verified`.
+
+The write request has the following shape. Replace the placeholders with `raw_hex` and `configured_address` from a successful read, and the intended target value. `configured_address` is the IDE's native communication route address, not the PLC's IP address:
+
+```json
+{
+  "action": "write",
+  "project": "C:/projects/machine.project",
+  "path": "Device/EtherCAT/Drive",
+  "index": 24730,
+  "subindex": 0,
+  "data_type": "UDINT",
+  "value": "<target numeric value>",
+  "expected_raw_hex": "<raw_hex returned by read>",
+  "expected_address": "<configured_address returned by read>"
+}
+```
+
+Supported types: `BOOL`, `SINT/USINT`, `INT/UINT`, `DINT/UDINT`, `LINT/ULINT`, `REAL/LREAL`, and `BYTE/WORD/DWORD/LWORD`. Supply write values as strings to preserve 64-bit integer precision. Raw bytes use little-endian order; the type must agree with the device definition.
+
+Interpret units using the drive manual and actual scaling parameters. Units absent from the ESI are `null`; the tool does not treat counts as millimetres. For homing speed and acceleration, also establish whether the controller performs host homing or drive homing before concluding that the setting governs the current motion.
+
+For example, the [Leadshine CL3C V1.9 manual](https://www.leisai.com/upload/file/2025/04/09/0aa0ac03-2eac-40f9-a37f-b9ec218c72bf.pdf) defines `2000:00` as peak current in 0.1 A counts, `6099:01/02` in command pulses/s, `609A:00` in command pulses/s², and `2001:00` / `6092:01` as command pulses per revolution (PDF pages 30, 97, 109–110). These units are device-specific; changes to `2001` take effect after restart.
+
+`write` changes the selected online object. It does not save the project, download the PLC application, or send additional start, stop, reset, motion, or nonvolatile-storage commands. The selected object itself determines immediate, restart-dependent, or stored effects and side effects according to the drive definition. Failure receipts preserve native errors and readback status; no request is retried automatically. A client timeout does not cancel the native operation. Inspect that call's `var/` result before deciding the next action.
+
+The online adapter targets **InoProShop 1.9.1.6 / SP11**, using reflection to call CoE interfaces in locally installed plugins. Compatibility with other versions is not established. Only adapter code is included; users install vendor plugins separately.
+
+Offline regression without an IDE: `npm test`. With Python 3, `python -m unittest discover -s tests -p "test_servo*.py" -v` covers the shared parameter API and finite worker, including project preservation on successful, failed, and exceptional servo requests. Native online-read acceptance and physical write acceptance are separate; isolated tests do not establish physical write acceptance.
+
+Normal sessions use the current user's configured gateway. A fresh `isolated=true` profile also needs the gateway referenced by the project; missing configuration returns a connection error without changing the target. On 2026-11-14, a real MCP read passed from a cold IDE using the normal gateway, with the project copy's hash unchanged. Validation includes 29 isolated Python tests, 3 MCP/Node tests and one focused independent review. Writes were tested with fake native interfaces, not on physical drives.
+
 ## Optional: build the flying shear example
 
 Prepare a blank software-controller template using the official IDE or public ScriptEngine. It must contain `Device`, one `Application`, `MainTask`, `SoftMotion General Axis Pool`, and an empty `PLC_PRG`, with IDE Simulation disabled. Do not prepopulate example axes or a flying shear program.
@@ -190,9 +247,9 @@ To export a boot application, run `batch` on the generated project with the step
 
 ## Usage notes
 
-- The tool performs offline engineering operations; it does not log into or download to a PLC.
+- `codesys_engineering` performs offline engineering operations. `codesys_servo` uses `read/write` for online drive parameters and `dictionary/startup` for project metadata.
 - Local results and the lock are stored under `var/`. Failed batches are not automatically replayed. If a timeout leaves the outcome unknown, inspect the IDE and the result referenced by `var/engineering.lock`; resolve the lock only after confirming its IDE has closed.
-- Project creation and template builds require new output paths. `batch` saves changes to existing projects.
+- Project creation and template builds require new output paths. `batch` saves changes to existing projects; `codesys_servo` does not save projects.
 - Obtain vendor software, device descriptions, motion components, native project templates, and licenses from official sources.
 
 ## License

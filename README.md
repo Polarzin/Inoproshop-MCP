@@ -4,9 +4,9 @@
 
 用自然语言描述需求，让 AI 在 InoProShop 中读取工程、编写 ST 程序、配置设备与任务，再调用原生编译器检查结果。
 
-InoProShop MCP 通过公开 ScriptEngine 接口，将这些工程操作接入标准 MCP 客户端，让程序编辑、工程配置和编译检查可以在同一段对话中完成。
+InoProShop MCP 通过公开 ScriptEngine 接口，将这些工程操作接入标准 MCP 客户端，让程序编辑、工程配置和编译检查可以在同一段对话中完成；在线驱动参数另由本机 CoE 插件适配器提供。
 
-[安装与配置](#安装) · [工具接口](#工具codesys_engineering) · [构建飞剪示例](#可选构建飞剪示例)
+[安装与配置](#安装) · [工程接口](#工具codesys_engineering) · [伺服参数](#工具codesys_servo) · [构建飞剪示例](#可选构建飞剪示例)
 
 ## 从程序到工程，覆盖常用开发操作
 
@@ -14,6 +14,7 @@ InoProShop MCP 通过公开 ScriptEngine 接口，将这些工程操作接入标
 - **ST 程序开发**：读取现有代码，修改声明与实现，按需局部替换；支持程序、函数、功能块、方法、属性及 Get/Set，以及全局变量和结构体、枚举等数据类型。
 - **设备与任务配置**：查询本机设备描述、添加设备、读写设备参数，配置任务周期、优先级与程序调用，管理依赖库和变量符号。
 - **原生编译与导出**：调用 InoProShop 编译器，获取实际错误与警告，供 AI 定位问题、继续修改；支持保存工程和导出软件控制器启动包。
+- **伺服参数调试**：在线 SDO 读写、ESI 参数字典和工程启动值对照，按驱动手册解释单位。
 - **复杂运动控制**：支持飞剪、电子齿轮／凸轮、CNC 等应用中 ST 控制程序的编写、修改、工程配置与编译。
 
 例如，可以直接交给 AI 这样的任务：
@@ -85,7 +86,7 @@ JSON 中的 Windows 路径建议使用 `/`，如上例；使用反斜杠时需�
 
 ### 4. 启用并确认连接
 
-保存配置后，在客户端启用或重新连接该 MCP 服务；必要时重启客户端。工具列表中出现 `codesys_engineering` 即表示 MCP 已连接，后续按下方示例调用。服务由客户端自动启动，无需另外运行 `npm start`。连接成功只表示 MCP 可用；IDE 路径、profile 和工程兼容性会在实际工程调用时检查。
+保存配置后，在客户端启用或重新连接该 MCP 服务；必要时重启客户端。工具列表中出现 `codesys_engineering` 和 `codesys_servo` 即表示 MCP 已连接，后续按下方示例调用。服务由客户端自动启动，无需另外运行 `npm start`。连接成功只表示 MCP 可用；IDE 路径、profile 和工程兼容性会在实际工程调用时检查。
 
 普通模式使用前关闭其他 IDE。需要与已有 IDE 并存时，在工具参数中显式设置 `isolated=true`。构建可能需要数分钟，客户端调用超时应至少为 660 秒。
 
@@ -168,6 +169,62 @@ JSON 中的 Windows 路径建议使用 `/`，如上例；使用反斜杠时需�
 
 创建或整理对象时会检查目标重名、移动环路和写后结果。重命名、移动后请编译检查程序引用；接口不承诺自动重构所有 ST 引用。工具仅提供固定操作，不提供任意 IronPython 脚本执行入口。
 
+## 工具：`codesys_servo`
+
+沿用工程中保存的控制器通信路径，通过原厂 CoE 服务访问指定 EtherCAT 从站。先在 IDE 中配置正确的通信路径、保存并关闭工程，再调用此工具；与其他 IDE 并存时使用独立工程副本和 `isolated=true`。每次调用只执行一个请求，结束后关闭自有 IDE。
+
+| `action` | 用途 | 主要参数 |
+|---|---|---|
+| `dictionary` | 读取已安装 ESI 的名称、类型、位宽与访问属性 | `query` 或 `index` 筛选，`offset` / `limit` 分页 |
+| `startup` | 读取工程中的启动 SDO 列表 | `path`、`connector_id` |
+| `read` | 在线上传一个 SDO，返回原始字节、解码值和读取时间 | `index`、`subindex`，可选 `data_type` |
+| `write` | 检查当前值后下载一个参数，并在线回读 | `index`、`subindex`、`data_type`、`value`、`expected_raw_hex`、`expected_address` |
+
+所有操作都要求 `.project` 绝对路径 `project` 和设备完整路径 `path`；`connector_id` 默认 `"1"`，以设备配置为准。索引传十进制整数，如 `0x609A = 24730`。例如读取驱动的回零加速度对象：
+
+```json
+{
+  "action": "read",
+  "project": "C:/projects/machine.project",
+  "path": "Device/EtherCAT/Drive",
+  "index": 24730,
+  "subindex": 0,
+  "data_type": "UDINT"
+}
+```
+
+将 `action` 改为 `dictionary` 可查这个对象的 ESI 定义；改为 `startup` 可读工程启动列表，再按 `index/subindex` 对照在线结果。ESI 默认值和启动列表都属于工程配置，不能代替在线值。`scope` 和 `online_verified` 标明回执范围。
+
+写入参数结构如下；占位内容须替换为刚才成功读取返回的 `raw_hex`、`configured_address` 及已经确定的目标数值。`configured_address` 是 IDE 原生通信路由地址，不是 PLC IP：
+
+```json
+{
+  "action": "write",
+  "project": "C:/projects/machine.project",
+  "path": "Device/EtherCAT/Drive",
+  "index": 24730,
+  "subindex": 0,
+  "data_type": "UDINT",
+  "value": "<目标数值>",
+  "expected_raw_hex": "<read 返回的 raw_hex>",
+  "expected_address": "<read 返回的 configured_address>"
+}
+```
+
+支持 `BOOL`、`SINT/USINT`、`INT/UINT`、`DINT/UDINT`、`LINT/ULINT`、`REAL/LREAL` 和 `BYTE/WORD/DWORD/LWORD`。写入数值用字符串传递，避免 64 位整数在 JSON 中丢失精度。原始字节按小端序解释，类型应与设备定义一致。
+
+单位依据驱动手册和实际标度参数解释；ESI 未提供的单位返回 `null`，工具不会把计数直接当作毫米。对回零速度、加速度等对象，还须确认控制器采用主站回零还是驱动器回零，才能判断该设值是否参与当前运动。
+
+例如，[雷赛 CL3C 手册 V1.9](https://www.leisai.com/upload/file/2025/04/09/0aa0ac03-2eac-40f9-a37f-b9ec218c72bf.pdf)的 `2000:00` 是峰值电流设定（每计数 0.1 A），`6099:01/02` 为指令脉冲/s，`609A:00` 为指令脉冲/s²，`2001:00` 与 `6092:01` 为每转指令脉冲数。对应 PDF 第30、97、109–110页；这些单位不能直接套用到其他驱动，`2001` 修改后需重启生效。
+
+`write` 会改变所选在线对象，不保存工程、不下装 PLC，也不额外发送启停、复位、运动或非易失存储命令。所选对象本身的即时、重启或存储生效方式和副作用按驱动定义。失败回执保留原生错误及读回状态；无自动重试。调用端超时不取消原生请求，应先检查本次 `var/` 结果，确认结果后再决定下一步。
+
+在线适配基线为 **InoProShop 1.9.1.6 / SP11**，通过反射调用本机安装插件的 CoE 接口；不是跨版本 ScriptEngine 通用承诺。仓库仅包含适配代码，厂商插件由使用者自行安装。
+
+正常会话使用当前用户已配置的网关。`isolated=true` 的全新用户目录也须具有工程所引用的网关；缺失时返回连接错误，不自动改通信目标。2026-11-14 已验证正常用户网关下真实 MCP 冷启动读取，工程副本哈希未变；29 项 Python 隔离测试、3 项 MCP/Node 测试和聚焦独审通过。写入使用假原生接口验证，未进行现场写参。
+
+离线回归（不启动 IDE）：`npm test`；可选 Python 3 执行 `python -m unittest discover -s tests -p "test_servo*.py" -v`，覆盖共享参数 API 与有限 worker，包括成功、失败和异常时均不保存工程。实际在线读取与真实写参验收分别报告，隔离测试不代替现场写参验收。
+
 ## 可选：构建飞剪示例
 
 通过官方 IDE 或公开 ScriptEngine 准备空白软件控制器模板，包含 `Device`、一个 `Application`、`MainTask`、`SoftMotion General Axis Pool` 和空 `PLC_PRG`，关闭 IDE Simulation 模式。不预置示例轴或飞剪程序。
@@ -190,9 +247,9 @@ JSON 中的 Windows 路径建议使用 `/`，如上例；使用反斜杠时需�
 
 ## 使用说明
 
-- 工具执行离线工程操作，不登录或下载到 PLC。
+- `codesys_engineering` 执行离线工程操作；`codesys_servo` 的 `read/write` 访问在线驱动参数，`dictionary/startup` 读取工程元数据。
 - 本地结果和锁保存在 `var/`。失败不自动重发；超时结果未知时先检查 IDE 与 `var/engineering.lock` 所指的结果，确认对应 IDE 已关闭后再处理锁。
-- 工程创建与模板构建要求新输出路径；`batch` 会保存对已有工程的修改。
+- 工程创建与模板构建要求新输出路径；`batch` 会保存对已有工程的修改，`codesys_servo` 不保存工程。
 - 厂商软件、设备描述、运动组件、原生工程模板和许可由使用者从官方来源取得。
 
 ## 许可
